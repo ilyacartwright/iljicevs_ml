@@ -18,6 +18,15 @@ class IljicevsModel:
         self.best_models = None
         self.selected_models = None
 
+    def fit(self, X_train, y_train):
+        """
+        Обучение выбранных моделей.
+        :param X_train: Признаки для обучения.
+        :param y_train: Метки для обучения.
+        """
+        for model in self.selected_models:
+            model.fit(X_train, y_train)
+            
     def check_class_balance(self, y):
         """
         Проверка баланса классов и предложение решения при несбалансированных данных.

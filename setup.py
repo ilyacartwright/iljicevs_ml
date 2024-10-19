@@ -1,8 +1,11 @@
 from setuptools import setup, find_packages
 
+with open("README.md", "r", encoding="utf-8") as fh:
+    long_description = fh.read()
+
 setup(
     name='iljicevs_ml',
-    version='0.1',
+    version='0.2.1',
     packages=find_packages(),
     install_requires=[
         'numpy',
@@ -11,6 +14,8 @@ setup(
         'hyperopt'
     ],
     description='Library implementation of the Iljiceva model.',
+    long_description=long_description,
+    long_description_content_type="text/markdown",
     author='Mihails Iljicevs',
     author_email='goenzi61@gmail.com',
     url='https://github.com/ilyacartwright/iljicevs_ml',
