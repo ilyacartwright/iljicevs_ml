@@ -141,3 +141,31 @@ class IljicevsModel:
         """
         predictions = self.weighted_average_predictions(X_test, y_test)
         return accuracy_score(y_test, predictions)
+
+    def cross_validate_with_metrics(self, X_train, y_train, metrics=None):
+        """
+        Проведение кросс-валидации с вычислением настраиваемых метрик.
+        :param X_train: Признаки для обучения.
+        :param y_train: Метки для обучения.
+        :param metrics: Метрики для оценки, например ['accuracy', 'f1', 'roc_auc'].
+        """
+        if metrics is None:
+            metrics = ['accuracy']
+
+        for model in self.selected_models:
+            print(f"Модель: {model.__class__.__name__}")
+            for metric in metrics:
+                if metric == 'accuracy':
+                    score = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
+                    print(f"Точность: {np.mean(score):.4f}")
+                elif metric == 'f1':
+                    score = cross_val_score(model, X_train, y_train, cv=5, scoring='f1_macro')
+                    print(f"F1-score: {np.mean(score):.4f}")
+                elif metric == 'roc_auc':
+                    # Если задача многоклассовая, используем стратегию 'ovr' или 'ovo'
+                    if len(np.unique(y_train)) > 2:
+                        score = cross_val_score(model, X_train, y_train, cv=5, scoring='roc_auc_ovr')
+                        print(f"ROC AUC (ovr): {np.mean(score):.4f}")
+                    else:
+                        score = cross_val_score(model, X_train, y_train, cv=5, scoring='roc_auc')
+                        print(f"ROC AUC: {np.mean(score):.4f}")
