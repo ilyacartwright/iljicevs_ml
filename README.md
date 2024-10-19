@@ -29,7 +29,7 @@ python setup.py install
 
 ## Usage
 
-### Basic Example
+### Basic Example IljicevsModel
 
 Here's an example of how you can use iljicevs_ml to select models, tune their hyperparameters, and evaluate their performance.
 
@@ -116,6 +116,105 @@ For more detailed model evaluation, you can use cross-validation with custom met
 ```python
 iljicevs.cross_validate_with_custom_metrics(X_train, y_train, custom_metrics=['accuracy', 'f1', 'roc_auc'])
 ```
+
+### Basic Example IljicevsCausalModel
+
+Below is an example of how to use the IljicevsCausalModel for causal analysis, visualization, and report generation.
+
+```python
+# Import necessary modules
+from iljicevs_ml import IljicevsCausalModel
+from sklearn.datasets import make_classification
+from sklearn.model_selection import train_test_split
+import numpy as np
+
+# Data generation
+X, y = make_classification(n_samples=1000, n_features=5, random_state=42)
+treatment = np.random.binomial(n=1, p=0.5, size=len(y))
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test, treatment_train, treatment_test = train_test_split(
+    X, y, treatment, test_size=0.3, random_state=42)
+
+# Initialize and train the Causal Model
+causal_model = IljicevsCausalModel(model_type='meta')
+causal_model.fit(X_train, treatment_train, y_train)
+
+# Directory for saving analysis results
+output_dir = "causal_analysis"
+
+# 1. Feature Importance Visualization
+causal_model.feature_importance(output_dir)
+
+# 2. Causal Effects Visualization
+causal_model.plot_causal_effects(X_test, treatment_test, y_test, output_dir)
+
+# 3. SHAP Values Visualization
+causal_model.plot_shap_values(X_test, output_dir)
+
+# 4. Counterfactual Analysis
+delta_uplift = causal_model.counterfactual_analysis(X_test, treatment_test, feature_index=0, new_value=1.0)
+print(f"Change in predictions when feature 0 is altered: {delta_uplift}")
+
+# 5. Confidence Interval Estimation for Predictions
+lower_bound, upper_bound = causal_model.estimate_confidence_intervals(X_test, treatment_test)
+print(f"Confidence Interval: [{lower_bound}, {upper_bound}]")
+
+# 6. Interaction Analysis Between Features
+causal_model.analyze_interactions(X_test, treatment_test, output_dir)
+
+# 7. Report Generation (Excel and Word)
+excel_report, word_report = causal_model.generate_report(X_test, treatment_test, y_test, output_dir)
+
+print(f"Excel report saved at: {excel_report}")
+print(f"Word report saved at: {word_report}")
+```
+
+### Key Features
+1. Feature Importance Visualization: Visualizes the importance of different features based on the causal model. The results are saved as images in the specified directory.
+```python
+causal_model.feature_importance(output_dir)
+```
+
+2. Causal Effects Visualization: Shows the causal effect of treatments on predictions.
+```python
+causal_model.plot_causal_effects(X_test, treatment_test, y_test, output_dir)
+```
+
+3. SHAP Values Visualization: Computes and visualizes SHAP values to explain model predictions.
+```python
+causal_model.plot_shap_values(X_test, output_dir)
+```
+
+4. Counterfactual Analysis: Allows you to see how the predictions change if one of the features is altered. This can help to understand the causal relationships.
+```python
+delta_uplift = causal_model.counterfactual_analysis(X_test, treatment_test, feature_index=0, new_value=1.0)
+print(f"Change in predictions when feature 0 is altered: {delta_uplift}")
+```
+
+5. Confidence Interval Estimation: Estimates confidence intervals for model predictions using bootstrap methods.
+```python
+lower_bound, upper_bound = causal_model.estimate_confidence_intervals(X_test, treatment_test)
+print(f"Confidence Interval: [{lower_bound}, {upper_bound}]")
+```
+
+6. Interaction Analysis: Analyzes and visualizes feature interactions using SHAP interaction values.
+```python
+causal_model.analyze_interactions(X_test, treatment_test, output_dir)
+```
+
+7. Report Generation: Generates a detailed report in both Excel and Word formats, containing the analysis results, feature importance, SHAP values, and visualizations.
+```python
+excel_report, word_report = causal_model.generate_report(X_test, treatment_test, y_test, output_dir)
+print(f"Excel report saved at: {excel_report}")
+print(f"Word report saved at: {word_report}")
+```
+
+### Report Generation
+The generated reports contain:
+
+* Excel Report: Includes multiple sheets with feature importance, counterfactual analysis, confidence intervals, and inserted visualizations.
+* Word Report: Contains detailed text summaries, tables of results, and visualizations as embedded images.
 
 ### Contributing
 Contributions are welcome! Please feel free to submit a Pull Request or open an Issue if you find bugs or want to suggest new features.

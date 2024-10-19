@@ -5,7 +5,7 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='iljicevs_ml',
-    version='0.2.3',
+    version='0.2.4',
     packages=find_packages(),
     install_requires=[
         'numpy',
@@ -14,7 +14,12 @@ setup(
         'hyperopt',
         'imblearn',
         'seaborn',
-        'tpot'
+        'tpot',
+        'python-docx',
+        'openpyxl',
+        'torch',
+        'causalml',
+        'pandas'
     ],
     description='Library implementation of the Iljiceva model.',
     long_description=long_description,
