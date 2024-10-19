@@ -5,13 +5,16 @@ with open("README.md", "r", encoding="utf-8") as fh:
 
 setup(
     name='iljicevs_ml',
-    version='0.2.2',
+    version='0.2.3',
     packages=find_packages(),
     install_requires=[
         'numpy',
         'scikit-learn',
         'matplotlib',
-        'hyperopt'
+        'hyperopt',
+        'imblearn',
+        'seaborn',
+        'tpot'
     ],
     description='Library implementation of the Iljiceva model.',
     long_description=long_description,

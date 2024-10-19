@@ -37,64 +37,72 @@ Here's an example of how you can use iljicevs_ml to select models, tune their hy
 ```Python
 from iljicevs_ml import IljicevsModel
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from sklearn.datasets import load_iris
 from sklearn.model_selection import train_test_split
+from sklearn.datasets import make_classification
+from sklearn.metrics import accuracy_score
 
-# Load data
-data = load_iris()
-X = data.data
-y = data.target
+# Create synthetic dataset for classification
+X, y = make_classification(n_samples=1000, n_features=20, n_classes=2, random_state=42, class_sep=1.5)
 
-# Train-test split
+# Split into training and test sets
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-# Define models and hyperparameters
+# Define models and parameters for hyperparameter tuning
 models = {
-    'logistic_regression': LogisticRegression(max_iter=200),
-    'random_forest': RandomForestClassifier(),
-    'svm': SVC(probability=True),
-    'gradient_boosting': GradientBoostingClassifier()
+    'RandomForest': RandomForestClassifier(random_state=42),
+    'GradientBoosting': GradientBoostingClassifier(random_state=42)
 }
 
 param_grids = {
-    'logistic_regression': {'C': [0.1, 1, 10]},
-    'random_forest': {'n_estimators': [50, 100], 'max_depth': [5, 10]},
-    'svm': {'C': [0.1, 1, 10], 'kernel': ['linear', 'rbf']},
-    'gradient_boosting': {'n_estimators': [50, 100], 'learning_rate': [0.01, 0.1]}
+    'RandomForest': {'n_estimators': [50, 100], 'max_depth': [3, 5, None]},
+    'GradientBoosting': {'n_estimators': [50, 100], 'learning_rate': [0.01, 0.1]}
 }
 
-# Initialize and train ensemble model
-iljicevs = IljicevsModel(models, param_grids)
+# Create an instance of IljicevsModel with the selected models and hyperparameter grids
+iljicevs_model = IljicevsModel(models=models, param_grids=param_grids, search_method="grid")
 
-# Check class balance
-iljicevs.check_class_balance(y_train)
+# Check and balance class distribution using SMOTE (if necessary)
+X_train_bal, y_train_bal = iljicevs_model.check_class_balance(X_train, y_train)
 
-# Tune hyperparameters
-iljicevs.tune_hyperparameters(X_train, y_train)
+# Tune hyperparameters using GridSearchCV
+iljicevs_model.tune_hyperparameters(X_train_bal, y_train_bal)
 
-# Select the best performing models
-iljicevs.select_best_models(X_train, y_train)
+# Select the top two models based on cross-validation results
+iljicevs_model.select_best_models(X_train_bal, y_train_bal, top_n=2)
 
-# Fit the selected models
-iljicevs.fit(X_train, y_train)
+# Train the selected models
+iljicevs_model.fit(X_train_bal, y_train_bal)
 
-# Evaluate the ensemble's accuracy on the test set
-accuracy = iljicevs.score(X_test, y_test)
-print(f"Ensemble accuracy: {accuracy}")
+# Evaluate accuracy on the test set
+accuracy = iljicevs_model.score(X_test, y_test)
+print(f"Test set accuracy: {accuracy:.4f}")
 
-# Display feature importance
-iljicevs.feature_importance()
+# Visualize feature importance for the ensemble models
+iljicevs_model.feature_importance()
 
-# Perform cross-validation with multiple metrics
-iljicevs.cross_validate_with_metrics(X_train, y_train, metrics=['accuracy', 'f1', 'roc_auc'])
+# Plot Precision-Recall curve
+iljicevs_model.plot_precision_recall_curve(X_test, y_test)
+
+# Compute stability of the ensemble models
+stability = iljicevs_model.stability_metric(X_test)
+print(f"Ensemble stability: {stability:.4f}")
+
+# Save and load the model
+iljicevs_model.save_model(iljicevs_model.selected_models[0], 'best_model.pkl')
+loaded_model = iljicevs_model.load_model('best_model.pkl')
+
+# Evaluate the loaded model on the test set
+loaded_accuracy = accuracy_score(y_test, loaded_model.predict(X_test))
+print(f"Loaded model accuracy: {loaded_accuracy:.4f}")
+
+# Example of using AutoML via TPOT (optional)
+# automl_pipeline = iljicevs_model.run_automl(X_train_bal, y_train_bal)
 ```
 
 ### Class Balance Checking
 To avoid issues with unbalanced datasets, you can use the built-in method check_class_balance() to get a summary of the class distribution and suggestions for handling imbalances:
 ```python
-iljicevs.check_class_balance(y_train)
+iljicevs.check_class_balance(X_train, y_train)
 ```
 
 ### Feature Importance
@@ -106,7 +114,7 @@ iljicevs.feature_importance()
 ### Cross-Validation with Metrics
 For more detailed model evaluation, you can use cross-validation with custom metrics:
 ```python
-iljicevs.cross_validate_with_metrics(X_train, y_train, metrics=['accuracy', 'f1', 'roc_auc'])
+iljicevs.cross_validate_with_custom_metrics(X_train, y_train, custom_metrics=['accuracy', 'f1', 'roc_auc'])
 ```
 
 ### Contributing
