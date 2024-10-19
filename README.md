@@ -66,7 +66,7 @@ param_grids = {
 }
 
 # Initialize and train ensemble model
-iljicevs = EnsembleModel(models, param_grids)
+iljicevs = IljicevsModel(models, param_grids)
 
 # Check class balance
 iljicevs.check_class_balance(y_train)
