@@ -1,0 +1,14 @@
+Metadata-Version: 1.2
+Name: iljicevs-ml
+Version: 0.1
+Summary: Library implementation of the Iljiceva model.
+Home-page: https://github.com/ilyacartwright/iljicevs_ml
+Author: Mihails Iljicevs
+Author-email: goenzi61@gmail.com
+License: UNKNOWN
+Description: UNKNOWN
+Platform: UNKNOWN
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.6
