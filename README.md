@@ -35,7 +35,7 @@ Here's an example of how you can use iljicevs_ml to select models, tune their hy
 
 
 ```Python
-from iljicevs_ml import EnsembleModel
+from iljicevs_ml import IljicevsModel
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import SVC
@@ -66,47 +66,47 @@ param_grids = {
 }
 
 # Initialize and train ensemble model
-ensemble = EnsembleModel(models, param_grids)
+iljicevs = EnsembleModel(models, param_grids)
 
 # Check class balance
-ensemble.check_class_balance(y_train)
+iljicevs.check_class_balance(y_train)
 
 # Tune hyperparameters
-ensemble.tune_hyperparameters(X_train, y_train)
+iljicevs.tune_hyperparameters(X_train, y_train)
 
 # Select the best performing models
-ensemble.select_best_models(X_train, y_train)
+iljicevs.select_best_models(X_train, y_train)
 
 # Fit the selected models
-ensemble.fit(X_train, y_train)
+iljicevs.fit(X_train, y_train)
 
 # Evaluate the ensemble's accuracy on the test set
-accuracy = ensemble.score(X_test, y_test)
+accuracy = iljicevs.score(X_test, y_test)
 print(f"Ensemble accuracy: {accuracy}")
 
 # Display feature importance
-ensemble.feature_importance()
+iljicevs.feature_importance()
 
 # Perform cross-validation with multiple metrics
-ensemble.cross_validate_with_metrics(X_train, y_train, metrics=['accuracy', 'f1', 'roc_auc'])
+iljicevs.cross_validate_with_metrics(X_train, y_train, metrics=['accuracy', 'f1', 'roc_auc'])
 ```
 
 ### Class Balance Checking
 To avoid issues with unbalanced datasets, you can use the built-in method check_class_balance() to get a summary of the class distribution and suggestions for handling imbalances:
 ```python
-ensemble.check_class_balance(y_train)
+iljicevs.check_class_balance(y_train)
 ```
 
 ### Feature Importance
 To visualize the importance of features across models, use:
 ```python
-ensemble.feature_importance()
+iljicevs.feature_importance()
 ```
 
 ### Cross-Validation with Metrics
 For more detailed model evaluation, you can use cross-validation with custom metrics:
 ```python
-ensemble.cross_validate_with_metrics(X_train, y_train, metrics=['accuracy', 'f1', 'roc_auc'])
+iljicevs.cross_validate_with_metrics(X_train, y_train, metrics=['accuracy', 'f1', 'roc_auc'])
 ```
 
 ### Contributing
