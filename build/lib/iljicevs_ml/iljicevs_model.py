@@ -1,300 +1,210 @@
-import numpy as np
-import matplotlib.pyplot as plt
-from sklearn.model_selection import cross_val_score, GridSearchCV
-from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, precision_score, recall_score
-from sklearn.utils import class_weight
-from collections import Counter
-from hyperopt import hp, fmin, tpe, Trials, STATUS_OK
-from imblearn.over_sampling import SMOTE
-import logging
-import joblib
-import seaborn as sns
-from joblib import Parallel, delayed
-from sklearn.metrics import make_scorer, precision_recall_curve
-from tpot import TPOTClassifier
+from .model_tuner import ModelTuner
+from .causal_model import IljicevsCausalModel
+from sklearn.model_selection import cross_val_score
+from sklearn.metrics import accuracy_score, classification_report
+import os
+import pandas as pd
+from docx import Document
+from docx.shared import Inches
+from openpyxl import load_workbook
+from openpyxl.drawing.image import Image as ExcelImage
 
-# Логирование
-logging.basicConfig(filename='model_training.log', level=logging.INFO)
+class IljicevsAnsambleModel:
+    def __init__(self, models=None, param_grids=None, search_method="grid", use_causal_model=False):
+        """
+        Initialization of the ensemble model with options for hyperparameter search method and causal model (EN).
+        Инициализация ансамбля моделей с возможностью выбора метода поиска гиперпараметров и причинно-следственной модели (RU).
+        Initialisierung des Ensemble-Modells mit Optionen für die Methode zur Suche nach Hyperparametern und Kausalmodell (DE).
+        使用超参数搜索方法和因果模型选项的集成模型初始化 (ZH).
 
-# Инкапсуляция и расширяемость
-class ModelTuner:
-    def __init__(self, model, param_grid=None, search_method="grid", max_evals=50):
-        """
-        Класс для настройки гиперпараметров моделей с использованием GridSearchCV или Hyperopt.
-        
-        :param model: Модель, которая будет настроена.
-        :param param_grid: Словарь параметров для поиска гиперпараметров (например, для GridSearchCV).
-        :param search_method: Строка, указывающая метод поиска гиперпараметров ('grid' или 'hyperopt').
-        :param max_evals: Количество итераций для байесовской оптимизации (Hyperopt).
-        """
-        self.model = model
-        self.param_grid = param_grid
-        self.search_method = search_method
-        self.max_evals = max_evals
-
-    def tune(self, X_train, y_train):
-        """
-        Метод для запуска процесса поиска гиперпараметров.
-        
-        :param X_train: Признаки обучающего набора данных.
-        :param y_train: Метки классов обучающего набора данных.
-        :return: Лучшая модель, подобранная с использованием выбранного метода.
-        """
-        if self.search_method == "grid":
-            return self.grid_search(X_train, y_train)
-        elif self.search_method == "hyperopt":
-            return self.hyperopt_search(X_train, y_train)
-
-    def grid_search(self, X_train, y_train):
-        """
-        Настройка гиперпараметров с использованием GridSearchCV.
-        
-        :param X_train: Признаки обучающего набора данных.
-        :param y_train: Метки классов обучающего набора данных.
-        :return: Лучшая модель по результатам GridSearchCV.
-        """
-        grid_search = GridSearchCV(self.model, self.param_grid, cv=5, scoring='accuracy')
-        grid_search.fit(X_train, y_train)
-        return grid_search.best_estimator_
-
-    def hyperopt_search(self, X_train, y_train):
-        """
-        Настройка гиперпараметров с использованием Hyperopt (байесовская оптимизация).
-        
-        :param X_train: Признаки обучающего набора данных.
-        :param y_train: Метки классов обучающего набора данных.
-        :return: Лучшая модель по результатам байесовской оптимизации.
-        """
-        def objective(params):
-            model = self.model
-            model.set_params(**params)
-            score = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy').mean()
-            return {'loss': -score, 'status': STATUS_OK}
-
-        trials = Trials()
-        best = fmin(fn=objective, space=self.param_grid, algo=tpe.suggest, max_evals=self.max_evals, trials=trials)
-        self.model.set_params(**best)
-        return self.model
-
-
-class IljicevsModel:
-    def __init__(self, models=None, param_grids=None, search_method="grid"):
-        """
-        Инициализация ансамбля моделей с возможностью выбора метода поиска гиперпараметров.
-        
-        :param models: Словарь с моделями, где ключ — название модели, а значение — объект модели.
-        :param param_grids: Словарь сеток гиперпараметров для каждой модели.
-        :param search_method: Строка, указывающая метод поиска гиперпараметров ('grid' или 'hyperopt').
+        Parameters (EN):
+        Параметры (RU):
+        Parameter (DE):
+        参数 (ZH):
+        - models (list): List of machine learning models to be included in the ensemble (EN).
+                         Список моделей машинного обучения для включения в ансамбль (RU).
+                         Liste von Modellen des maschinellen Lernens, die im Ensemble enthalten sind (DE).
+                         要包含在集成中的机器学习模型列表 (ZH).
+        - param_grids (list of dicts): List of hyperparameter grids for tuning each model (EN).
+                                       Список сеток гиперпараметров для настройки каждой модели (RU).
+                                       Liste von Hyperparameter-Rastern zur Abstimmung jedes Modells (DE).
+                                       调整每个模型的超参数网格列表 (ZH).
+        - search_method (str): Search method for hyperparameter tuning ('grid', 'random', etc.) (EN).
+                               Метод поиска гиперпараметров ('grid', 'random' и т.д.) (RU).
+                               Suchmethode für die Hyperparameter-Abstimmung ('grid', 'random' usw.) (DE).
+                               超参数调整的搜索方法（'grid'，'random' 等）(ZH).
+        - use_causal_model (bool): Whether to use the causal model for training (EN).
+                                   Использовать ли причинно-следственную модель для обучения (RU).
+                                   Ob das Kausalmodell für das Training verwendet werden soll (DE).
+                                   是否使用因果模型进行训练 (ZH).
         """
         self.models = models
         self.param_grids = param_grids
+        self.search_method = search_method
         self.best_models = None
         self.selected_models = None
-        self.search_method = search_method
+        self.use_causal_model = use_causal_model
+        if use_causal_model:
+            self.causal_model = IljicevsCausalModel()
 
-    def fit(self, X_train, y_train):
+    def fit(self, X_train, y_train, treatment=None):
         """
-        Обучение выбранных моделей на обучающем наборе данных.
-        
-        :param X_train: Признаки обучающего набора данных.
-        :param y_train: Метки классов обучающего набора данных.
+        Train the selected models on the training dataset (EN).
+        Обучение выбранных моделей на обучающем наборе данных (RU).
+        Training der ausgewählten Modelle auf dem Trainingsdatensatz (DE).
+        在训练数据集上训练选定的模型 (ZH).
+
+        Parameters (EN):
+        Параметры (RU):
+        Parameter (DE):
+        参数 (ZH):
+        - X_train (array-like): Feature matrix for training (EN).
+                                Матрица признаков для обучения (RU).
+                                Merkmalsmatrix zum Training (DE).
+                                用于训练的特征矩阵 (ZH).
+        - y_train (array-like): Target variable for training (EN).
+                                Целевая переменная для обучения (RU).
+                                Zielvariable zum Training (DE).
+                                用于训练的目标变量 (ZH).
+        - treatment (array-like, optional): Treatment variable for causal model (optional) (EN).
+                                            Переменная воздействия для причинно-следственной модели (необязательно) (RU).
+                                            Behandlungsvariable für das Kausalmodell (optional) (DE).
+                                            因果模型的处理变量（可选） (ZH).
         """
+        if self.use_causal_model and treatment is not None:
+            self.causal_model.fit(X_train, treatment, y_train)
         for model in self.selected_models:
             model.fit(X_train, y_train)
 
-    def check_class_balance(self, X_train, y_train):
-        """
-        Проверка баланса классов и балансировка данных с использованием SMOTE при необходимости.
-        
-        :param X_train: Признаки обучающего набора данных.
-        :param y_train: Метки классов обучающего набора данных.
-        :return: (X_res, y_res) - сбалансированные признаки и метки классов или оригинальные данные, если балансировка не требуется.
-        """
-        class_counts = Counter(y_train)
-        total_samples = len(y_train)
-        for cls, count in class_counts.items():
-            print(f"Класс {cls}: {count} примеров ({count / total_samples:.2%})")
-
-        if min(class_counts.values()) / max(class_counts.values()) < 0.5:
-            print("Предупреждение: классы несбалансированы!")
-            smote = SMOTE()
-            X_res, y_res = smote.fit_resample(X_train, y_train)
-            print("Применен SMOTE для балансировки классов.")
-            return X_res, y_res
-        return X_train, y_train
-
-    def tune_hyperparameters(self, X_train, y_train):
-        """
-        Настройка гиперпараметров с использованием ModelTuner.
-        
-        :param X_train: Признаки обучающего набора данных.
-        :param y_train: Метки классов обучающего набора данных.
-        """
-        self.best_models = {}
-        for name, model in self.models.items():
-            tuner = ModelTuner(model, self.param_grids[name], search_method=self.search_method)
-            self.best_models[name] = tuner.tune(X_train, y_train)
-            print(f"Наилучшие параметры для {name}")
-
-    def select_best_models(self, X_train, y_train, top_n=2):
-        """
-        Выбор лучших моделей на основе кросс-валидации.
-        
-        :param X_train: Признаки обучающего набора данных.
-        :param y_train: Метки классов обучающего набора данных.
-        :param top_n: Количество лучших моделей для выбора в ансамбль.
-        """
-        mean_scores = {}
-        for name, model in self.best_models.items():
-            scores = cross_val_score(model, X_train, y_train, cv=5, scoring='accuracy')
-            mean_scores[name] = np.mean(scores)
-
-        sorted_models = sorted(mean_scores.items(), key=lambda item: item[1], reverse=True)
-        self.selected_models = [self.best_models[name] for name, _ in sorted_models[:top_n]]
-        print(f"Выбраны модели: {[name for name, _ in sorted_models[:top_n]]}")
-
-    def feature_importance(self):
-        """
-        Вычисление и визуализация важности признаков для ансамбля моделей.
-        """
-        importances = np.zeros(self.selected_models[0].n_features_in_)
-        for model in self.selected_models:
-            if hasattr(model, 'feature_importances_'):
-                importances += model.feature_importances_
-
-        importances /= len(self.selected_models)
-        sns.barplot(x=np.arange(len(importances)), y=importances)
-        plt.xlabel("Признаки")
-        plt.ylabel("Важность")
-        plt.title("Важность признаков для ансамбля моделей")
-        plt.show()
-
-    def cross_validate_with_custom_metrics(self, X_train, y_train, custom_metrics=None):
-        """
-        Проведение кросс-валидации с вычислением настраиваемых метрик.
-        
-        :param X_train: Признаки обучающего набора данных.
-        :param y_train: Метки классов обучающего набора данных.
-        :param custom_metrics: Словарь метрик для оценки, например {'accuracy': make_scorer(accuracy_score)}.
-        """
-        if custom_metrics is None:
-            custom_metrics = {
-                'accuracy': make_scorer(accuracy_score),
-                'f1': make_scorer(f1_score, average='macro'),
-                'roc_auc': make_scorer(roc_auc_score, multi_class='ovr')
-            }
-
-        for model in self.selected_models:
-            print(f"Модель: {model.__class__.__name__}")
-            for metric_name, scorer in custom_metrics.items():
-                score = cross_val_score(model, X_train, y_train, cv=5, scoring=scorer)
-                print(f"{metric_name}: {np.mean(score):.4f}")
-
-    def weighted_average_predictions(self, X_test, y_test):
-        """
-        Усреднение предсказаний с учетом весов моделей.
-        
-        :param X_test: Признаки тестового набора данных.
-        :param y_test: Метки классов тестового набора данных.
-        :return: Предсказанные метки классов.
-        """
-        weights = []
-        for model in self.selected_models:
-            scores = cross_val_score(model, X_test, y_test, cv=5, scoring='accuracy')
-            weights.append(np.mean(scores))
-
-        total_proba = np.zeros((X_test.shape[0], len(np.unique(y_test))))
-        for i, model in enumerate(self.selected_models):
-            proba = model.predict_proba(X_test)
-            total_proba += weights[i] * proba
-
-        avg_proba = total_proba / sum(weights)
-        final_predictions = np.argmax(avg_proba, axis=1)
-        return final_predictions
-
     def score(self, X_test, y_test):
         """
-        Оценка точности ансамбля моделей на тестовых данных.
-        
-        :param X_test: Признаки тестового набора данных.
-        :param y_test: Метки классов тестового набора данных.
-        :return: Точность предсказаний ансамбля моделей.
-        """
-        predictions = self.weighted_average_predictions(X_test, y_test)
-        return accuracy_score(y_test, predictions)
+        Evaluate the accuracy of the ensemble model on the test dataset (EN).
+        Оценка точности ансамбля моделей на тестовых данных (RU).
+        Bewertung der Genauigkeit des Ensemble-Modells auf dem Testdatensatz (DE).
+        在测试数据集上评估集成模型的准确性 (ZH).
 
-    def plot_precision_recall_curve(self, X_test, y_test):
-        """
-        Визуализация Precision-Recall кривой для ансамбля моделей.
-        
-        :param X_test: Признаки тестового набора данных.
-        :param y_test: Метки классов тестового набора данных.
-        """
-        for model in self.selected_models:
-            proba = model.predict_proba(X_test)[:, 1]
-            precision, recall, _ = precision_recall_curve(y_test, proba)
-            plt.plot(recall, precision, label=f'{model.__class__.__name__}')
-        
-        plt.xlabel('Recall')
-        plt.ylabel('Precision')
-        plt.title('Precision-Recall Curve')
-        plt.legend()
-        plt.show()
+        Parameters (EN):
+        Параметры (RU):
+        Parameter (DE):
+        参数 (ZH):
+        - X_test (array-like): Feature matrix for testing (EN).
+                               Матрица признаков для тестирования (RU).
+                               Merkmalsmatrix zum Testen (DE).
+                               用于测试的特征矩阵 (ZH).
+        - y_test (array-like): Target variable for testing (EN).
+                               Целевая переменная для тестирования (RU).
+                               Zielvariable zum Testen (DE).
+                               用于测试的目标变量 (ZH).
 
-    def parallel_cross_val(self, X_train, y_train):
-        """
-        Параллельное выполнение кросс-валидации для всех выбранных моделей.
-        
-        :param X_train: Признаки обучающего набора данных.
-        :param y_train: Метки классов обучающего набора данных.
-        :return: Результаты кросс-валидации для каждой модели.
-        """
-        results = Parallel(n_jobs=-1)(delayed(cross_val_score)(model, X_train, y_train, cv=5) for model in self.selected_models)
-        return results
-
-    def stability_metric(self, X_test):
-        """
-        Оценка стабильности предсказаний ансамбля моделей.
-        
-        :param X_test: Признаки тестового набора данных.
-        :return: Метрика стабильности ансамбля (чем ближе к 1, тем стабильнее предсказания).
+        Returns (EN):
+        Возвращает (RU):
+        Rückgabe (DE):
+        返回 (ZH):
+        - accuracy (float): Accuracy score of the ensemble model on the test dataset (EN).
+                            Оценка точности ансамбля моделей на тестовом наборе данных (RU).
+                            Genauigkeitswert des Ensemble-Modells auf dem Testdatensatz (DE).
+                            集成模型在测试数据集上的准确性评分 (ZH).
         """
         predictions = [model.predict(X_test) for model in self.selected_models]
-        std_dev = np.std(predictions, axis=0)
-        stability_score = 1 - np.mean(std_dev)
-        print(f"Стабильность ансамбля: {stability_score:.4f}")
-        return stability_score
+        return accuracy_score(y_test, predictions)
 
-    def save_model(self, model, filename):
+    def generate_report(self, X_test, y_test, output_dir):
         """
-        Сохранение модели на диск.
-        
-        :param model: Модель для сохранения.
-        :param filename: Имя файла для сохранения модели.
-        """
-        joblib.dump(model, filename)
-        print(f"Модель сохранена в {filename}")
+        Generate a classification report and save it to Word and Excel (EN).
+        Генерация отчёта с результатами классификации и сохранение в Word и Excel (RU).
+        Generieren eines Klassifikationsberichts und Speichern in Word und Excel (DE).
+        生成分类报告并保存为 Word 和 Excel 文件 (ZH).
 
-    def load_model(self, filename):
-        """
-        Загрузка модели с диска.
-        
-        :param filename: Имя файла с моделью.
-        :return: Загруженная модель.
-        """
-        model = joblib.load(filename)
-        print(f"Модель загружена из {filename}")
-        return model
+        Parameters (EN):
+        Параметры (RU):
+        Parameter (DE):
+        参数 (ZH):
+        - X_test (array-like): Feature matrix for testing (EN).
+                               Матрица признаков для тестирования (RU).
+                               Merkmalsmatrix zum Testen (DE).
+                               用于测试的特征矩阵 (ZH).
+        - y_test (array-like): Target variable for testing (EN).
+                               Целевая переменная для тестирования (RU).
+                               Zielvariable zum Testen (DE).
+                               用于测试的目标变量 (ZH).
+        - output_dir (str): Directory to save the generated reports (EN).
+                            Директория для сохранения сгенерированных отчётов (RU).
+                            Verzeichnis zum Speichern der generierten Berichte (DE).
+                            保存生成报告的目录 (ZH).
 
-    def run_automl(self, X_train, y_train):
+        Returns (EN):
+        Возвращает (RU):
+        Rückgabe (DE):
+        返回 (ZH):
+        - word_path (str): Path to the saved Word report (EN).
+                           Путь к сохранённому отчёту в формате Word (RU).
+                           Pfad zum gespeicherten Word-Bericht (DE).
+                           保存的 Word 报告的路径 (ZH).
+        - excel_path (str): Path to the saved Excel report (EN).
+                            Путь к сохранённому отчёту в формате Excel (RU).
+                            Pfad zum gespeicherten Excel-Bericht (DE).
+                            保存的 Excel 报告的路径 (ZH).
         """
-        Запуск AutoML с использованием TPOT для автоматического подбора моделей и гиперпараметров.
-        
-        :param X_train: Признаки обучающего набора данных.
-        :param y_train: Метки классов обучающего набора данных.
-        :return: Лучший пайплайн моделей, найденный TPOT.
+        report = classification_report(y_test, [model.predict(X_test) for model in self.selected_models], output_dict=True)
+        df = pd.DataFrame(report).transpose()
+
+        # Сохранение отчёта в Excel (RU), Save report in Excel (EN), Speichern des Berichts in Excel (DE), 将报告保存为 Excel (ZH)
+        excel_path = os.path.join(output_dir, "classification_report.xlsx")
+        df.to_excel(excel_path)
+
+        # Сохранение отчёта в Word (RU), Save report in Word (EN), Speichern des Berichts in Word (DE), 将报告保存为 Word (ZH)
+        doc = Document()
+        doc.add_heading('Classification Report', 0)
+        doc.add_paragraph(str(df))
+        word_path = os.path.join(output_dir, "classification_report.docx")
+        doc.save(word_path)
+
+        return word_path, excel_path
+
+    def fit_and_report(self, X_train, y_train, X_test, y_test, output_dir):
         """
-        automl = TPOTClassifier(generations=5, population_size=50, cv=5, verbosity=2, random_state=42)
-        automl.fit(X_train, y_train)
-        print("Лучший пайплайн TPOT:", automl.fitted_pipeline_)
-        return automl.fitted_pipeline_
+        Full cycle: model training, prediction, and report generation (EN).
+        Полный цикл: обучение моделей, предсказание и генерация отчётов (RU).
+        Vollständiger Zyklus: Modelltraining, Vorhersage und Berichterstellung (DE).
+        完整流程：模型训练、预测和报告生成 (ZH).
+
+        Parameters (EN):
+        Параметры (RU):
+        Parameter (DE):
+        参数 (ZH):
+        - X_train (array-like): Feature matrix for training (EN).
+                                Матрица признаков для обучения (RU).
+                                Merkmalsmatrix zum Training (DE).
+                                用于训练的特征矩阵 (ZH).
+        - y_train (array-like): Target variable for training (EN).
+                                Целевая переменная для обучения (RU).
+                                Zielvariable zum Training (DE).
+                                用于训练的目标变量 (ZH).
+        - X_test (array-like): Feature matrix for testing (EN).
+                               Матрица признаков для тестирования (RU).
+                               Merkmalsmatrix zum Testen (DE).
+                               用于测试的特征矩阵 (ZH).
+        - y_test (array-like): Target variable for testing (EN).
+                               Целевая переменная для тестирования (RU).
+                               Zielvariable zum Testen (DE).
+                               用于测试的目标变量 (ZH).
+        - output_dir (str): Directory to save the generated reports (EN).
+                            Директория для сохранения сгенерированных отчётов (RU).
+                            Verzeichnis zum Speichern der generierten Berichte (DE).
+                            保存生成报告的目录 (ZH).
+
+        Returns (EN):
+        Возвращает (RU):
+        Rückgabe (DE):
+        返回 (ZH):
+        - word_path (str): Path to the saved Word report (EN).
+                           Путь к сохранённому отчёту в формате Word (RU).
+                           Pfad zum gespeicherten Word-Bericht (DE).
+                           保存的 Word 报告的路径 (ZH).
+        - excel_path (str): Path to the saved Excel report (EN).
+                            Путь к сохранённому отчёту в формате Excel (RU).
+                            Pfad zum gespeicherten Excel-Bericht (DE).
+                            保存的 Excel 报告的路径 (ZH).
+        """
+        self.fit(X_train, y_train)
+        return self.generate_report(X_test, y_test, output_dir)
