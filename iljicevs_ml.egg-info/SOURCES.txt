@@ -1,6 +1,7 @@
 README.md
 setup.py
 iljicevs_ml/__init__.py
+iljicevs_ml/auto_adaptive.py
 iljicevs_ml/causal_model.py
 iljicevs_ml/iljicevs_model.py
 iljicevs_ml/model_tuner.py
